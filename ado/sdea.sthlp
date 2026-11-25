@@ -814,6 +814,10 @@ bloom.rampike@gmail.com
 {pstd}
 For bug reports and feature requests, please contact the author.
 
+{pstd}
+Copyright (c) 2026 Choonjoo Lee.{break}
+Licensed under the {browse "https://spdx.org/licenses/AFL-3.0.html":Academic Free License version 3.0} (AFL-3.0).
+
 
 {title:Also See}
 

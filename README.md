@@ -62,4 +62,8 @@ For the optional empirical comparison, supply the external data directory as a t
 
 ## Licensing
 
-The external DEA-Stata core identifies its license as AFL-3.0. The sdea author's choice of a license for this independent package is pending.
+Copyright © 2026 Choonjoo Lee. Licensed under the Academic Free License version 3.0 (AFL-3.0). The license covers the sdea code, documentation, examples, tests and project-generated benchmark files. [Full license text](LICENSE)
+
+The separately downloaded DEA-Stata core carries its own AFL-3.0 notice. External empirical datasets retain their source-specific terms. [Example data and redistribution](data/README.md)
+
+For bug reports and questions about sdea, contact Choonjoo Lee at bloom.rampike@gmail.com.

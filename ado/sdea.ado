@@ -43,6 +43,9 @@
 *! SYNTAX: sdea outputs [if] [in], inputs(varlist) [options]
 *!
 *! Author: Choonjoo Lee (email: bloom.rampike@gmail.com)
+*! Copyright (c) 2026 Choonjoo Lee.
+*! Licensed under the Academic Free License version 3.0.
+*! SPDX-License-Identifier: AFL-3.0
 
 program define sdea, rclass
     version 16.0

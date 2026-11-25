@@ -2,7 +2,7 @@
 
 ## Synthetic benchmark
 
-The 9,040 firms are generated from seed 119. The four reference scores per firm in `tests/fixtures/full_dea_9040.csv` and the measurements in `tests/validation_9040.csv` are project-generated results. These files can accompany a public release without permission from an empirical data provider. The project can specify separate reuse terms for its own contributions.
+The 9,040 firms are generated from seed 119. The four reference scores per firm in `tests/fixtures/full_dea_9040.csv` and the measurements in `tests/validation_9040.csv` are project-generated results distributed with sdea under AFL-3.0. [Full license text](../LICENSE)
 
 ## Swedish pharmacies
 
