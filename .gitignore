@@ -1,0 +1,7 @@
+.DS_Store
+._*
+*.dta
+*.log
+*.smcl
+*.zip
+/output/

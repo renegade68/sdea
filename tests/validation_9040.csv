@@ -1,0 +1,9 @@
+run,rts,orientation,command_seconds,pareto_candidates,final_references,uncertain_restored,full_sample_retries,max_abs_score_difference
+1,crs,input,22.578,1424,639,0,0,8.8818e-16
+1,crs,output,21.914,1424,639,0,0,6.6613e-16
+1,vrs,input,25.886,1424,639,0,0,1.0914e-11
+1,vrs,output,23.11,1424,639,0,0,1.1369e-13
+2,crs,input,22.366,1424,639,0,0,8.8818e-16
+2,crs,output,21.829,1424,639,0,0,6.6613e-16
+2,vrs,input,25.718,1424,639,0,0,1.0914e-11
+2,vrs,output,23.115,1424,639,0,0,1.1369e-13
