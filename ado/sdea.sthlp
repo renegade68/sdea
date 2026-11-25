@@ -111,9 +111,12 @@ various DEA formulations and can track how efficiency evolves over time using
 streaming algorithms.
 
 {pstd}
-{cmd:sdea} is organized as an extension of the current {cmd:dea} core. Development version 5.8.0
-uses the complete {cmd:ado} directory of DEA-Stata 2.0.73
-(commit ad77287466b22c3edd1ae3cc074981225c95d424) on {cmd:adopath}. {cmd:sdea.ado} adds the streaming-specific components:
+{cmd:sdea} 5.8.0 requires Stata 16 or later and the complete {cmd:ado} directory of
+{browse "https://github.com/renegade68/DEA-Stata/archive/ad77287466b22c3edd1ae3cc074981225c95d424.zip":DEA-Stata 2.0.73 (tested ZIP)}.
+Extract the ZIP's top-level folder beside {cmd:load.do}. In a fresh Stata session,
+change to the folder containing {cmd:load.do} and run {cmd:do load.do}.
+The README includes the Stata download command and instructions for an existing core installation.
+{cmd:sdea.ado} adds the streaming-specific components:
 BuildHull frame maintenance, update gates, drift diagnostics, and time-indexed
 frontier-management quantities.
 
@@ -514,7 +517,9 @@ DMU is evaluated against the current frame, exterior arrivals are added, and
 the {opt prune()} option can remove redundant frame members. The option
 {bf:bhvariant(dula)} implements the original Dulá-style phase-1 frame search more
 closely by using the dual separating hyperplane and hyperplane translation to
-select the next frame element from the remaining candidate set.
+select the next frame element from the remaining candidate set. Cite Dulá (2011)
+for the two-phase frame algorithm and Dulá and López (2013) for DEA with
+streaming arrivals. See {help sdea##references:References}.
 
 {pstd}
 {bf:FullStream} - Self-inclusive evaluation. New DMU is added to frontier first,
@@ -730,9 +735,14 @@ Charnes, A., W. W. Cooper, and E. Rhodes. 1978. Measuring the efficiency of
 decision making units. {it:European Journal of Operational Research} 2: 429-444.
 
 {phang}
-Dula, J. H., and F. J. Lopez. 2013. Building and using a data envelopment analysis
-model to assess the efficiency of a set of decision-making units.
-Working Paper.
+Dulá, J. H. 2011. An Algorithm for Data Envelopment Analysis.
+{it:INFORMS Journal on Computing} 23(2), 284-296.
+{browse "https://doi.org/10.1287/ijoc.1100.0400":doi:10.1287/ijoc.1100.0400}.
+
+{phang}
+Dulá, J. H., and F. J. López. 2013. DEA with streaming data.
+{it:Omega} 41(1), 41-47.
+{browse "https://doi.org/10.1016/j.omega.2011.07.010":doi:10.1016/j.omega.2011.07.010}.
 
 {phang}
 Fare, R., S. Grosskopf, B. Lindgren, and P. Roos. 1992. Productivity changes
