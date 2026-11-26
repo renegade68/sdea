@@ -1,4 +1,4 @@
-*! version 5.8.0  26nov2026
+*! version 5.9.0  26nov2026
 *! Static radial TE with refset(buildhull), using DEA-Stata 2.0.73.
 *! sdea - Streaming DEA Package
 *!
@@ -95,7 +95,8 @@ program define sdea, rclass
         [SEModel(string)] ///
         [REFSet(string)] ///
         [BHVariant(string)] ///
-        [PRUNE(integer 0)]
+        [PRUNE(integer 0)] ///
+        [WORKers(integer 1)]
     
     marksample touse
     local outputs `varlist'
@@ -126,6 +127,25 @@ program define sdea, rclass
         exit 198
     }
     local refset = lower("`refset'")
+    if `workers'<1 | missing(`workers') {
+        di as err "workers() must be a positive integer"
+        exit 198
+    }
+    if `workers'>1 {
+        if "`method'"!="standard" | "`refset'"!="buildhull" {
+            di as err "workers() requires method(standard) refset(buildhull)"
+            exit 198
+        }
+        if !inlist("`c(os)'","MacOSX","Unix") | !c(MP) {
+            di as err "parallel scoring currently requires Stata/MP on macOS or Unix"
+            exit 198
+        }
+        if `workers'>c(processors_mach) {
+            di as err "workers() exceeds the number of processors on this machine"
+            exit 198
+        }
+        local workers = min(`workers',`n_total')
+    }
     if "`refset'"!="" & (!inlist("`refset'","full","buildhull") | "`method'"!="standard") {
         di as err "refset(full|buildhull) requires method(standard)"
         exit 198
@@ -381,7 +401,7 @@ program define sdea, rclass
     *===========================================================================
     
     di as text _n "{hline 70}"
-    di as text "Streaming DEA Analysis (sdea v5.8.0)"
+    di as text "Streaming DEA Analysis (sdea v5.9.0)"
     di as text "{hline 70}"
     di as text "Method: " as result "`method'"
     di as text "Model: " as result "`model'"
@@ -419,11 +439,12 @@ program define sdea, rclass
         _sdea_refset `outputs', inputs(`inputs') touse(`touse') ///
             generate(`gen_alpha' `gen_frame' `gen_drift') dmu(`dmu') ///
             orientation(`orientation') rts(`rts') bhvariant(`bhvariant') ///
-            solver(`solver') prune(`prune') starters(`starters') `replace'
+            solver(`solver') prune(`prune') starters(`starters') workers(`workers') `replace'
         return add
         return local method "standard"
         return local model "te"
         return local refset "buildhull"
+        return scalar workers = `workers'
         return local orientation "`orientation'"
         return local rts "`rts'"
         return local bhvariant "`bhvariant'"
@@ -1180,7 +1201,7 @@ program define _sdea_refset, rclass sortpreserve
     version 16
     syntax varlist(numeric), Inputs(varlist numeric) TOUSE(varname) ///
         GENerate(namelist min=3 max=3) [DMU(varname)] ORIentation(string) ///
-        RTS(string) BHVariant(string) SOLver(string) PRUNE(integer) STARTers(integer) [REPlace]
+        RTS(string) BHVariant(string) SOLver(string) PRUNE(integer) STARTers(integer) WORKers(integer) [REPlace]
 
     local raw : list inputs | varlist
     local protected `raw' `dmu'
@@ -1219,7 +1240,7 @@ program define _sdea_refset, rclass sortpreserve
     frame put `raw' `obs' if `touse', into(`work')
     frame `work': quietly _sdea_refset_fit `varlist', inputs(`inputs') ///
         score(`score') member(`member') orientation(`orientation') rts(`rts') ///
-        bhvariant(`bhvariant') solver(`solver') prune(`prune') starters(`starters')
+        bhvariant(`bhvariant') solver(`solver') prune(`prune') starters(`starters') workers(`workers')
     local hull_ipm = r(hull_ipm)
     local hull_simplex = r(hull_simplex)
     local hull_failed = r(hull_failed)
@@ -1263,7 +1284,7 @@ program define _sdea_refset_fit, rclass
     version 16
     syntax varlist(numeric), Inputs(varlist numeric) SCORE(name) MEMBER(name) ///
         ORIentation(string) RTS(string) BHVariant(string) SOLver(string) ///
-        PRUNE(integer) STARTers(integer)
+        PRUNE(integer) STARTers(integer) WORKers(integer)
     * Keep source columns out of the legacy builder's fixed output namespace.
     local xs
     local ys
@@ -1302,8 +1323,26 @@ program define _sdea_refset_fit, rclass
     }
     generate double `score' = .
     tempname stats
-    mata: st_matrix("`stats'", _sdea_static_evaluate("`xs'","`ys'","`nx'","`ny'", ///
-        "`candidates'","`member'","`score'","`orientation'","`rts'"))
+    if `workers'>1 {
+        tempfile stub
+        local job "`stub'.sdea"
+        quietly findfile sdea.ado
+        mata: st_local("source",pathresolve(pwd(),st_global("r(fn)")))
+        quietly findfile _dea_simplex.ado
+        mata: st_local("core",pathgetparent(pathresolve(pwd(),st_global("r(fn)"))))
+        local executable "`c(sysdir_stata)'StataMP.app/Contents/MacOS/stata-mp"
+        capture confirm file "`macval(executable)'"
+        if _rc local executable "`c(sysdir_stata)'stata-mp"
+        confirm file "`macval(executable)'"
+        mkdir "`macval(job)'"
+    }
+    capture noisily mata: st_matrix("`stats'", _sdea_static_evaluate("`xs'","`ys'","`nx'","`ny'", ///
+        "`candidates'","`member'","`score'","`orientation'","`rts'",`workers'))
+    local rc = _rc
+    if `workers'>1 {
+        mata: _sdea_worker_cleanup(st_local("job"),`workers')
+    }
+    if `rc' exit `rc'
     return scalar hull_ipm = `hullcounts'[1,1]
     return scalar hull_simplex = `hullcounts'[1,2]
     return scalar hull_failed = `hullcounts'[1,3]
@@ -6421,14 +6460,159 @@ real scalar _sdea_static_score(real matrix X, real matrix Y, real matrix rawX,
     return(min((1,score)))
 }
 
+real colvector _sdea_score_rows(real matrix X, real matrix Y, real matrix rawX, real matrix rawY,
+    real colvector fr, string scalar ort, string scalar rts, real scalar first,
+    real scalar last, real scalar retries)
+{
+    real matrix FX,FY,origFX,origFY
+    real colvector scores
+    real scalar k
+    FX = X[fr,.]
+    FY = Y[fr,.]
+    origFX = rawX[fr,.]
+    origFY = rawY[fr,.]
+    scores = J(last-first+1,1,.)
+    retries = 0
+    for (k=first; k<=last; k++) {
+        scores[k-first+1] = _sdea_static_score(FX,FY,origFX,origFY,X[k,.],Y[k,.],
+            rawX[k,.],rawY[k,.],ort,rts)
+        if (missing(scores[k-first+1])) {
+            retries++
+            scores[k-first+1] = _sdea_static_score(X,Y,rawX,rawY,X[k,.],Y[k,.],
+                rawX[k,.],rawY[k,.],ort,rts)
+            if (missing(scores[k-first+1])) {
+                errprintf("full-reference radial score failed for estimation-sample row %g\n",k)
+                _error(430)
+            }
+        }
+    }
+    return(scores)
+}
+
+// All workers read the same normalized and original matrices and final frame.
+void _sdea_worker_run(real scalar i, real scalar workers)
+{
+    real scalar f, first, last, retries
+    real matrix X,Y,rawX,rawY
+    real colvector fr,scores
+    string rowvector paths,model
+    f = fopen("../sample.bin","r")
+    paths = fgetmatrix(f)
+    model = fgetmatrix(f)
+    X = fgetmatrix(f)
+    Y = fgetmatrix(f)
+    rawX = fgetmatrix(f)
+    rawY = fgetmatrix(f)
+    fr = fgetmatrix(f)
+    fclose(f)
+    first = floor((i-1)*rows(X)/workers)+1
+    last = floor(i*rows(X)/workers)
+    scores = _sdea_score_rows(X,Y,rawX,rawY,fr,model[1],model[2],first,last,retries)
+    f = fopen("result.bin","w")
+    fputmatrix(f,(first,last,retries))
+    fputmatrix(f,scores)
+    fclose(f)
+}
+
+string scalar _sdea_shell_quote(string scalar s)
+{
+    return("'" + subinstr(s,"'", "'"+char(92)+"''") + "'")
+}
+
+void _sdea_worker_cleanup(string scalar job, real scalar workers)
+{
+    real scalar i,j
+    string scalar folder
+    string colvector files
+    for (i=1; i<=workers; i++) {
+        folder = job+"/"+strofreal(i)
+        if (!direxists(folder)) continue
+        files = dir(folder,"files","*")
+        for (j=1; j<=rows(files); j++) unlink(folder+"/"+files[j])
+        rmdir(folder)
+    }
+    unlink(job+"/sample.bin")
+    unlink(job+"/worker.do")
+    unlink(job+"/launch.sh")
+    rmdir(job)
+}
+
+real colvector _sdea_parallel_scores(real matrix X, real matrix Y, real matrix rawX, real matrix rawY,
+    real colvector fr, string scalar ort, string scalar rts, real scalar workers, real scalar retries)
+{
+    real scalar f, script, i, first, last, rc
+    real colvector scores, part
+    real rowvector info
+    string scalar job, folder, exe, driver
+    job = st_local("job")
+    exe = _sdea_shell_quote(st_local("executable"))
+    driver = _sdea_shell_quote(pathjoin(pathgetparent(st_local("source")),"_sdea_worker.do"))
+    f = fopen(job+"/sample.bin","w")
+    fputmatrix(f,(st_local("source"),st_local("core")))
+    fputmatrix(f,(ort,rts))
+    fputmatrix(f,X)
+    fputmatrix(f,Y)
+    fputmatrix(f,rawX)
+    fputmatrix(f,rawY)
+    fputmatrix(f,fr)
+    fclose(f)
+    script = fopen(job+"/launch.sh","w")
+    fput(script,"cd "+_sdea_shell_quote(job)+" || exit 1")
+    fput(script,"cp "+driver+" worker.do || exit 1")
+    for (i=1; i<=workers; i++) {
+        folder = job+"/"+strofreal(i)
+        mkdir(folder)
+        f = fopen(folder+"/profile.do","w")
+        fput(f,"sysdir set PERSONAL .")
+        fput(f,"sysdir set PLUS .")
+        fclose(f)
+        fput(script,"(cd "+strofreal(i)+" && exec "+exe+" -b do ../worker.do "+
+            strofreal(i)+" "+strofreal(workers)+") &")
+    }
+    fput(script,"wait")
+    fclose(script)
+    st_local("launcher",_sdea_shell_quote(job+"/launch.sh"))
+    stata("shell /bin/sh "+char(96)+"macval(launcher)"+char(39))
+
+    scores = J(rows(X),1,.)
+    retries = 0
+    for (i=1; i<=workers; i++) {
+        folder = job+"/"+strofreal(i)
+        if (!fileexists(folder+"/status")) {
+            errprintf("Stata worker %g did not finish. Check the Stata/MP batch executable and ado installation.\n",i)
+            _error(603)
+        }
+        f = fopen(folder+"/status","r")
+        rc = strtoreal(fget(f))
+        fclose(f)
+        if (rc!=0) {
+            errprintf("Stata worker %g failed with return code %g\n",i,rc)
+            _error(rc)
+        }
+        f = fopen(folder+"/result.bin","r")
+        info = fgetmatrix(f)
+        part = fgetmatrix(f)
+        fclose(f)
+        first = floor((i-1)*rows(X)/workers)+1
+        last = floor(i*rows(X)/workers)
+        if (cols(info)!=3 | rows(info)!=1) _error(459)
+        if (info[1]!=first | info[2]!=last | rows(part)!=last-first+1 | cols(part)!=1) _error(459)
+        if (hasmissing(part) | min(part)<=0 | max(part)>1) _error(459)
+        scores[|first\last|] = part
+        retries = retries + info[3]
+    }
+    return(scores)
+}
+
 real rowvector _sdea_static_evaluate(string scalar xs, string scalar ys,
     string scalar nx, string scalar ny, string scalar candidate, string scalar member,
-    string scalar dest, string scalar ort, string scalar rts)
+    string scalar dest, string scalar ort, string scalar rts, | real scalar workers)
 {
     real matrix X, Y, rawX, rawY, FX, FY, origFX, origFY
     real colvector keep, fr, omitted, scores
     real rowvector w
     real scalar i,k,alpha,retained,retries
+    if (args()==9) workers=1
     rawX = st_data(.,tokens(xs))
     rawY = st_data(.,tokens(ys))
     X = st_data(.,tokens(nx))
@@ -6460,24 +6644,11 @@ real rowvector _sdea_static_evaluate(string scalar xs, string scalar ys,
         retained++
     }
     fr = vec(selectindex(keep))
-    FX = X[fr,.]
-    FY = Y[fr,.]
-    origFX = rawX[fr,.]
-    origFY = rawY[fr,.]
-    scores = J(rows(X),1,.)
-    retries = 0
-    for (k=1; k<=rows(X); k++) {
-        scores[k] = _sdea_static_score(FX,FY,origFX,origFY,X[k,.],Y[k,.],
-            rawX[k,.],rawY[k,.],ort,rts)
-        if (missing(scores[k])) {
-            retries++
-            scores[k] = _sdea_static_score(X,Y,rawX,rawY,X[k,.],Y[k,.],
-                rawX[k,.],rawY[k,.],ort,rts)
-            if (missing(scores[k])) {
-                errprintf("full-reference radial score failed for estimation-sample row %g\n",k)
-                _error(430)
-            }
-        }
+    if (workers==1) {
+        scores = _sdea_score_rows(X,Y,rawX,rawY,fr,ort,rts,1,rows(X),retries)
+    }
+    else {
+        scores = _sdea_parallel_scores(X,Y,rawX,rawY,fr,ort,rts,workers,retries)
     }
     st_store(.,member,keep)
     st_store(.,dest,scores)

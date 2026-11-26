@@ -1,4 +1,4 @@
-# sdea 5.8.0 for Stata
+# sdea 5.9.0 for Stata (development)
 
 `sdea` estimates data envelopment analysis (DEA) models as observations arrive. It also computes radial technical efficiency for a cross-section using a reduced reference set.
 
@@ -38,6 +38,21 @@ do examples/cross_section.do
 
 The four-firm example uses `method(standard) refset(buildhull)` to score all firms against a reduced VRS reference set. Firm 3 has input-oriented efficiency 0.75. Firms 1 and 2 are identical and efficient, and only one is needed as a reference. For output orientation, the reported score is the reciprocal of the radial expansion factor. Both examples accept an optional third argument naming an existing output directory for a CSV of their results.
 
+### Parallel scoring from Stata
+
+After loading the package, run the example directly in Stata/MP:
+
+```stata
+do examples/generate_9040.do
+sdea y1 y2, inputs(x1 x2 x3 x4 x5) dmu(firm) method(standard) ///
+    refset(buildhull) rts(vrs) orientation(output) workers(2) generate(te isref drift)
+display r(workers)
+```
+
+The parent Stata session builds and checks one reference set. Each child Stata process scores a separate group of target firms against that same set using the package's Mata solver. A failed reduced-set score is retried against the full sample. The parent restores the scores to their original rows before creating the requested output variables. The default is `workers(1)`. The parallel path uses the system POSIX shell to start the Stata/MP batch executable. All DEA calculations run in Stata/Mata. This path has been tested on macOS with Stata/MP 16.1. Each child uses one Stata processor and a temporary copy of the sample matrices. Small samples can take longer with multiple workers because of process startup.
+
+On the 9,040-firm example, two single-worker VRS output runs took 23.586 and 23.682 seconds on an Apple M5 Pro with Stata/MP 16.1. Two runs with `workers(2)` took 13.823 and 13.896 seconds, including reference-set construction, worker startup and collection. Each run retained 639 firms. The scores matched the single-worker run exactly, and the largest difference from full-reference DEA was 1.14e-13. [Timing records](tests/validation_workers_9040.csv)
+
 ## Citing BuildHull
 
 For the two-phase DEA algorithm that first identifies the extreme efficient units (the frame) and then scores units against that frame, cite J. H. Dulá (2011), “An Algorithm for Data Envelopment Analysis,” *INFORMS Journal on Computing* 23(2), 284–296. The `bhvariant(dula)` option follows the phase-one search using a separating hyperplane. The default `bhvariant(modified)` adds exterior arrivals to the current frame and supports optional pruning. [Dulá (2011)](https://doi.org/10.1287/ijoc.1100.0400)
@@ -56,7 +71,9 @@ foreach check in validate_concept_drift_scenarios validate_concept_drift_heterog
 }
 ```
 
-The benchmark generates 9,040 firms with the mt64 generator and seed 119. It compares each firm's score under CRS and VRS, in both orientations, with `tests/fixtures/full_dea_9040.csv` at an absolute tolerance of 1e-7. The fixture contains the four full-sample DEA-Stata reference scores by firm. To reproduce those columns, run `examples/generate_9040.do` and use the pinned `dea x1 x2 x3 x4 x5 = y1 y2, dmu(firm) stage(1) engine(auto)` with the corresponding `rts()`, `orientation()` and `generate()` on a fresh copy for each model. The benchmark accepts a repeat count as its third argument. `tests/validation_9040.csv` records two reference runs with Stata/MP 16.1. Elapsed times depend on the host.
+On a Stata/MP host with the parallel launcher, `do tests/workers.do` compares the sequential and two-worker paths under all four radial specifications.
+
+The benchmark generates 9,040 firms with the mt64 generator and seed 119. It compares each firm's score under CRS and VRS, in both orientations, with `tests/fixtures/full_dea_9040.csv` at an absolute tolerance of 1e-7. The fixture contains the four full-sample DEA-Stata reference scores by firm. To reproduce those columns, run `examples/generate_9040.do` and use the pinned `dea x1 x2 x3 x4 x5 = y1 y2, dmu(firm) stage(1) engine(auto)` with the corresponding `rts()`, `orientation()` and `generate()` on a fresh copy for each model. The benchmark accepts a repeat count as its third argument and the number of scoring workers as its fourth (both default to 1). `tests/validation_9040.csv` records two reference runs with Stata/MP 16.1. Elapsed times depend on the host.
 
 For the optional empirical comparison, supply the external data directory as a third argument to `examples/empirical.do`. File origins, variables and checksums are in the [data guide](data/README.md).
 

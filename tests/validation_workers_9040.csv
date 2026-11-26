@@ -1,0 +1,5 @@
+run,workers,rts,orientation,elapsed_seconds,n,refs,full_retries,max_abs_diff_serial,max_abs_diff_full
+1,1,vrs,output,23.586,9040,639,0,0,1.1402e-13
+2,2,vrs,output,13.823,9040,639,0,0,1.1402e-13
+3,2,vrs,output,13.896,9040,639,0,0,1.1402e-13
+4,1,vrs,output,23.682,9040,639,0,0,1.1402e-13

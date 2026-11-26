@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 5.8.0  26nov2026}{...}
+{* *! version 5.9.0  26nov2026}{...}
 {viewerjumpto "Syntax" "sdea##syntax"}{...}
 {viewerjumpto "Description" "sdea##description"}{...}
 {viewerjumpto "Options" "sdea##options"}{...}
@@ -42,6 +42,8 @@ where {it:varlist} contains the output variables.
 {synopt:{opt meth:od(string)}}streaming method; default is {bf:buildhull}{p_end}
 {synopt:{opt mod:el(string)}}DEA model; default is {bf:te}{p_end}
 {synopt:{opt refs:et(full|buildhull)}}reference set for {cmd:method(standard) model(te)}; default {cmd:full}{p_end}
+
+{synopt:{opt work:ers(#)}}number of Stata processes used to score the final static BuildHull frame; default 1{p_end}
 
 {syntab:DEA Specification}
 {synopt:{opt ori:entation(string)}}orientation: {bf:input} or {bf:output} (default){p_end}
@@ -111,7 +113,7 @@ various DEA formulations and can track how efficiency evolves over time using
 streaming algorithms.
 
 {pstd}
-{cmd:sdea} 5.8.0 requires Stata 16 or later and the complete {cmd:ado} directory of
+{cmd:sdea} 5.9.0 requires Stata 16 or later and the complete {cmd:ado} directory of
 {browse "https://github.com/renegade68/DEA-Stata/archive/ad77287466b22c3edd1ae3cc074981225c95d424.zip":DEA-Stata 2.0.73 (tested ZIP)}.
 Extract the ZIP's top-level folder beside {cmd:load.do}. In a fresh Stata session,
 change to the folder containing {cmd:load.do} and run {cmd:do load.do}.
@@ -160,6 +162,16 @@ hyperplane selection. Positive {cmd:starters()} and {cmd:prune()} apply to the m
 variant. A failed coverage check retains the candidate. A failed score or primal
 residual check triggers a full-reference retry for that firm. If that retry also fails,
 the command exits with r(430) before publishing the requested variables.
+
+{pstd}
+With {cmd:workers(2)}, two Stata/MP batch processes score disjoint groups of firms
+against the same final reference set. The default {cmd:workers(1)} runs in the
+calling session. The parallel launcher uses the system POSIX shell and the
+Stata/MP batch executable under the Stata installation directory. It has been
+tested on macOS. The number requested must be positive and may not exceed
+the machine's processor count for parallel runs. At most one worker per selected
+firm is used. Each child uses one processor. Process startup can outweigh
+the savings on small samples.
 
 {pstd}
 For example, using two output variables and five inputs:
@@ -570,6 +582,7 @@ frontier using super-efficiency.
 {synopt:{cmd:r(N_efficient)}}number of efficient DMUs{p_end}
 {synopt:{cmd:r(N_frame)}}number of frontier members{p_end}
 {synopt:{cmd:r(refset)}}full or buildhull for standard radial TE{p_end}
+{synopt:{cmd:r(workers)}}actual number of scoring workers for {cmd:refset(buildhull)}{p_end}
 {synopt:{cmd:r(N_candidates)}}static BuildHull candidates after dominance screening{p_end}
 {synopt:{cmd:r(N_hull_ipm)}}IPM calls during frame construction (before coverage checks){p_end}
 {synopt:{cmd:r(N_hull_simplex)}}simplex calls during construction, including retries with {cmd:solver(auto)}{p_end}
